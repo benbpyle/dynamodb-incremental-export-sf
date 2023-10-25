@@ -1,14 +1,39 @@
-# Welcome to your CDK TypeScript project
+# DynamoDB Incremental Export with Step Functions
 
-This is a blank project for CDK development with TypeScript.
+Purpose: Working example of using AWS Step Functions to perform and manage a DynamoDB Incremental export process
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+## Getting Started
 
-## Useful commands
+### Deploying
 
-* `npm run build`   compile typescript to js
-* `npm run watch`   watch for changes and compile
-* `npm run test`    perform the jest unit tests
-* `cdk deploy`      deploy this stack to your default AWS account/region
-* `cdk diff`        compare deployed stack with current state
-* `cdk synth`       emits the synthesized CloudFormation template
+First off, install [Node.js](https://nodejs.org/en)
+
+```bash
+# install AWS CDK
+npm install -g aws-cdk
+# clone the repository
+cd dynamodb-incremental-export-sf
+npm install
+```
+
+Once dependencies have been installed, you are ready to run CDK
+
+```bash
+cdk deploy
+```
+
+## Destroying
+
+Simply run:
+
+```bash
+cdk destroy
+```
+
+## Implementation
+
+For a further and in-depth review of how to use this repository and what it supports, head on over the [Blog Article](https://binaryheap.com) <Article not complete but under construction>
+
+## State Machine
+
+![State Machine](./dd_export_state_machine.png)
