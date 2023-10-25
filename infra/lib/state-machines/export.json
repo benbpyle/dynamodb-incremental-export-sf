@@ -1,0 +1,208 @@
+{
+  "StartAt": "Find Last Run",
+  "States": {
+    "Find Last Run": {
+      "Next": "Last Run State",
+      "Type": "Task",
+      "ResultPath": "$.context",
+      "ResultSelector": {
+        "runStatus.$": "$.Item.runStatus.S",
+        "lastRunTime.$": "$.Item.lastRunTime.S",
+        "currentRunTime.$": "$$.Execution.StartTime"
+      },
+      "Resource": "arn:aws:states:::dynamodb:getItem",
+      "Parameters": {
+        "Key": {
+          "id": {
+            "S": "RUN"
+          }
+        },
+        "TableName": "${JobExportTable}",
+        "ConsistentRead": true
+      }
+    },
+    "Last Run State": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.context.runStatus",
+          "StringEquals": "RUNNING",
+          "Next": "Job in Progress"
+        }
+      ],
+      "Default": "Set Run Time"
+    },
+    "Set Run Time": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:putItem",
+      "Parameters": {
+        "TableName": "${JobExportTable}",
+        "Item": {
+          "id": {
+            "S": "CURRENT_RUN"
+          },
+          "triggerTime": {
+            "S.$": "$$.Execution.StartTime"
+          }
+        }
+      },
+      "Next": "Update Job to Running",
+      "ResultPath": null
+    },
+    "Update Job to Running": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${JobExportTable}",
+        "Key": {
+          "id": {
+            "S": "RUN"
+          }
+        },
+        "UpdateExpression": "SET runStatus = :s",
+        "ExpressionAttributeValues": {
+          ":s": {
+            "S": "RUNNING"
+          }
+        }
+      },
+      "Next": "ExportTableToPointInTime",
+      "ResultPath": null
+    },
+    "ExportTableToPointInTime": {
+      "Type": "Task",
+      "Next": "Export Status",
+      "Parameters": {
+        "S3Bucket": "${BucketName}",
+        "TableArn": "${TableToExportArn}",
+        "ExportFormat": "DYNAMODB_JSON",
+        "ExportType": "INCREMENTAL_EXPORT",
+        "IncrementalExportSpecification": {
+          "ExportFromTime.$": "$.context.lastRunTime",
+          "ExportToTime.$": "$.context.currentRunTime",
+          "ExportViewType": "NEW_IMAGE"
+        }
+      },
+      "Resource": "arn:aws:states:::aws-sdk:dynamodb:exportTableToPointInTime",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "Set Failed"
+        }
+      ]
+    },
+    "Export Status": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.ExportDescription.ExportStatus",
+          "StringEquals": "IN_PROGRESS",
+          "Next": "Pause To Verify Export"
+        },
+        {
+          "Variable": "$.ExportDescription.ExportStatus",
+          "StringEquals": "FAILED",
+          "Next": "Set Failed"
+        },
+        {
+          "Variable": "$.ExportDescription.ExportStatus",
+          "StringEquals": "COMPLETED",
+          "Next": "Get Triggered Time"
+        }
+      ],
+      "Default": "Get Triggered Time"
+    },
+    "Pause To Verify Export": {
+      "Type": "Wait",
+      "Seconds": 60,
+      "Next": "DescribeExport"
+    },
+    "DescribeExport": {
+      "Type": "Task",
+      "Next": "Export Status",
+      "Parameters": {
+        "ExportArn.$": "$.ExportDescription.ExportArn"
+      },
+      "Resource": "arn:aws:states:::aws-sdk:dynamodb:describeExport",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "Set Failed"
+        }
+      ]
+    },
+    "Job in Progress": {
+      "Type": "Succeed",
+      "Comment": "Job succeeded because there was nothing to do as there was still a job running"
+    },
+    "Set Failed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${JobExportTable}",
+        "Key": {
+          "id": {
+            "S": "RUN"
+          }
+        },
+        "UpdateExpression": "SET runStatus = :s",
+        "ExpressionAttributeValues": {
+          ":s": {
+            "S": "FAILED"
+          }
+        }
+      },
+      "Next": "Fail"
+    },
+    "Fail": {
+      "Type": "Fail"
+    },
+    "Get Triggered Time": {
+      "Next": "Complete Job",
+      "Type": "Task",
+      "ResultSelector": {
+        "triggerTime.$": "$.Item.triggerTime.S"
+      },
+      "Resource": "arn:aws:states:::dynamodb:getItem",
+      "Parameters": {
+        "Key": {
+          "id": {
+            "S": "CURRENT_RUN"
+          }
+        },
+        "TableName": "${JobExportTable}",
+        "ConsistentRead": true
+      }
+    },
+    "Complete Job": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${JobExportTable}",
+        "Key": {
+          "id": {
+            "S": "RUN"
+          }
+        },
+        "UpdateExpression": "SET runStatus = :s, lastRunTime = :r",
+        "ExpressionAttributeValues": {
+          ":s": {
+            "S": "COMPLETED"
+          },
+          ":r": {
+            "S.$": "$.triggerTime"
+          }
+        }
+      },
+      "Next": "Export Completed"
+    },
+    "Export Completed": {
+      "Type": "Succeed"
+    }
+  },
+  "TimeoutSeconds": 3600
+}

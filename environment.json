@@ -1,0 +1,9 @@
+{
+  "Parameters": {
+    "LOG_LEVEL": "debug",
+    "IS_LOCAL": "true",
+    "TABLE_ARN": "arn:aws:dynamodb:us-west-2:252703795646:table/TableToExport",
+    "BUCKET_NAME": "196ee34f-3361-4914-80ed-6da70a9f08c5-export",
+    "RECHECK_QUEUE_URL": "https://sqs.us-west-2.amazonaws.com/252703795646/recheck-queue"
+  }
+}
